@@ -36,6 +36,8 @@ type Claims struct {
 	UniversalId   string `json:"universal_id,omitempty"`   // Unified user UUID
 	PhoneNumber   string `json:"phone_number,omitempty"`   // User phone number
 	GithubAccount string `json:"github_account,omitempty"` // User GitHub account
+	Vip           int    `json:"vip,omitempty"`            // User VIP level
+	VipExpire     string `json:"vip_expire,omitempty"`      // User VIP expiration time
 	jwt.RegisteredClaims
 }
 
@@ -147,6 +149,9 @@ type UserWithoutThirdIdp struct {
 	//SigninWrongTimes    int    `json:"signinWrongTimes"`
 
 	//ManagedAccounts []ManagedAccount `xorm:"managedAccounts blob" json:"managedAccounts"`
+
+	Vip       int    `xorm:"int default 0" json:"vip"`
+	VipExpire string `xorm:"varchar(100)" json:"vip_expire"`
 }
 
 type ClaimsShort struct {
@@ -295,6 +300,10 @@ func getUserWithoutThirdIdp(user *User) *UserWithoutThirdIdp {
 		//SigninWrongTimes:    user.SigninWrongTimes,
 
 		//ManagedAccounts: user.ManagedAccounts,
+
+		// 添加 VIP 字段复制
+		Vip:       user.Vip,
+		VipExpire: user.VipExpire,
 	}
 
 	return res
@@ -421,6 +430,8 @@ func generateJwtToken(application *Application, user *User, provider string, non
 		UniversalId:   user.UniversalId,
 		PhoneNumber:   phoneNumber,
 		GithubAccount: githubAccount,
+		Vip:           user.Vip,
+		VipExpire:     user.VipExpire,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    originBackend,
 			Subject:   user.UniversalId, // Use unified UUID as subject

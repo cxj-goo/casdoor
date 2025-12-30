@@ -94,6 +94,8 @@ type User struct {
 	Ranking           int      `json:"ranking"`
 	Balance           float64  `json:"balance"`
 	Currency          string   `xorm:"varchar(100)" json:"currency"`
+	Vip               int      `xorm:"int default 0" json:"vip"`
+	VipExpire         string   `xorm:"varchar(100)" json:"vip_expire"`
 	IsDefaultAvatar   bool     `json:"isDefaultAvatar"`
 	IsOnline          bool     `json:"isOnline"`
 	IsAdmin           bool     `json:"isAdmin"`
@@ -564,6 +566,24 @@ func GetUserByUserIdOnly(userId string) (*User, error) {
 	}
 
 	user := User{Id: userId}
+	existed, err := ormer.Engine.Get(&user)
+	if err != nil {
+		return nil, err
+	}
+
+	if existed {
+		return &user, nil
+	} else {
+		return nil, nil
+	}
+}
+
+func GetUserByUniversalIdOnly(universalId string) (*User, error) {
+	if universalId == "" {
+		return nil, nil
+	}
+
+	user := User{UniversalId: universalId}
 	existed, err := ormer.Engine.Get(&user)
 	if err != nil {
 		return nil, err

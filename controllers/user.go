@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/beego/beego/utils/pagination"
+	"github.com/casdoor/casdoor/auth"
 	"github.com/casdoor/casdoor/conf"
 	"github.com/casdoor/casdoor/object"
 	"github.com/casdoor/casdoor/util"
@@ -706,4 +707,98 @@ func (c *ApiController) RemoveUserFromGroup() {
 	}
 
 	c.ResponseOk(affected)
+}
+
+
+// UpdateUserVip
+// @Title UpdateUserVip
+// @Tag User API
+// @Description update user's VIP level and expiration time
+// @Param   body    body   object  true  "The VIP update request"
+// @Success 200 {object} controllers.Response The Response object
+// @router /update-user-vip [post]
+func (c *ApiController) UpdateUserVip() {
+	// 验证权限：只能通过应用的 ClientId/ClientSecret 认证，个人token无法认证
+	// 使用 auth 包中的认证函数
+	userId, err := auth.GetUsernameByClientIdSecret(c.Ctx)
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+	
+	// 如果没有提供有效的 ClientId/ClientSecret，则拒绝访问
+	if userId == "" {
+		c.ResponseError(c.T("general:Missing client_id or client_secret"))
+		return
+	}
+	
+	var req struct {
+		UniversalId    string `json:"user_id"` // casdoor.UniversalId=oidc-auth.user_id
+		Vip            *int    `json:"vip"`
+		VipExpire      string `json:"vip_expire"`
+	}
+
+	err = json.Unmarshal(c.Ctx.Input.RequestBody, &req)
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+
+	if req.UniversalId == "" {
+		c.ResponseError(c.T("general:Missing parameter: user_id"))
+		return
+	}
+
+	// 根据 universalId 查找用户
+	user, err := object.GetUserByUniversalIdOnly(req.UniversalId)
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+
+	if user == nil {
+		c.ResponseError(fmt.Sprintf(c.T("general:The UniversalId: %s doesn't exist"), req.UniversalId))
+		return
+	}
+
+	// 更新 VIP 字段
+	updated := false
+	if req.Vip != nil {
+		if *req.Vip != user.Vip {
+			user.Vip = *req.Vip
+			updated = true
+		}
+	}
+
+	if req.VipExpire != "" {
+		if req.VipExpire != user.VipExpire {
+			user.VipExpire = req.VipExpire
+			updated = true
+		}
+	}
+
+	if !updated {
+		c.Data["json"] = wrapActionResponse(false)
+		c.ServeJSON()
+		return
+	}
+
+	// 更新到数据库（需要将 userId 转换为 owner/name 格式）
+	userFullName := util.GetId(user.Owner, user.Name)
+	affected, err := object.UpdateUser(userFullName, user, []string{"vip", "vip_expire"}, false)
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+
+	if affected {
+		err = object.UpdateUserToOriginalDatabase(user)
+		if err != nil {
+			c.ResponseError(err.Error())
+			return
+		}
+	}
+
+	c.Data["json"] = wrapActionResponse(affected)
+	c.ServeJSON()
 }
